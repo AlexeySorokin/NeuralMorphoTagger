@@ -1,0 +1,10 @@
+{
+	"symbols_has_features": true, "train_files": ["data/UD/ud_french-sequoia_tags.in"], "dev_files": ["data/UD/ud_french-sequoia_dev.in"],
+	"model_file": "models/ud_french-sequoia_3a_nornn.hdf5", "save_file": "models/ud_french-sequoia_3a_nornn.json",
+	"model_params": {
+		"use_embeddings": true, "use_attention": true, "use_attention_bias": true, "attention_activation": "concatenate", "use_output_rnn": false,
+		"use_label": false, "use_feats": false,
+		"batch_size": 64, "validation_split": 0.2, "nepochs": 50,
+		"history": 3, "embeddings_size": 96, "memory_embeddings_size": 96, "rnn_size": 128, "rnn": "lstm"},
+	"stop_callback": {"patience": 25, "monitor": "val_loss"}
+}
