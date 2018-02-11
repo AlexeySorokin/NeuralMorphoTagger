@@ -67,14 +67,14 @@ if __name__ == '__main__':
                     dev_data += read_input(dev_file, label_field="pos")
         else:
             dev_data = None
-        lm.train(train_data, X_dev=dev_data, model_file=params["model_file"])
+        lm.train(train_data, X_dev=dev_data, model_file=params["model_file"],
+                 save_file=params["save_file"])
     elif params["load_file"] is not None:
         lm, train_data = load_lm(params["load_file"]), None
     else:
         raise ValueError("Either train_file or load_file should be given")
-    dump_file = params.get("dump_file", params["model_file"])
-    if params["save_file"] is not None and dump_file is not None:
-        lm.to_json(params["save_file"], dump_file)
+    if params["save_file"] is not None and params["dump_file"] is not None:
+        lm.to_json(params["save_file"], params["dump_file"])
     if params["attention_file"] is not None:
         if train_data is None:
             print("Impossible to output attention: no training data")

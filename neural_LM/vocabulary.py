@@ -9,6 +9,7 @@ from .UD_preparation.read_tags import descr_to_feats
 def vocabulary_from_json(info):
     vocab = Vocabulary(info["character"])
     for attr, val in info.items():
+        print(attr)
         setattr(vocab, attr, val)
     return vocab
 
@@ -36,7 +37,7 @@ class Vocabulary:
     def jsonize(self):
         info = {attr: val for attr, val in inspect.getmembers(self)
                 if not(attr.startswith("__") or inspect.ismethod(val)
-                or isinstance(getattr(Vocabulary, attr), property))}
+                or isinstance(getattr(Vocabulary, attr, None), property))}
         return info
 
 

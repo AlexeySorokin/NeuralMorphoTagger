@@ -52,7 +52,7 @@ def read_input(infile, label_field=None, max_num=-1):
             if line == "":
                 continue
             splitted = line.split()
-            curr_elem = [splitted[1]]
+            curr_elem = [splitted[2]]
             feats = splitted[feats_column] if len(splitted) > feats_column else ""
             feats = [x.split("=") for x in feats.split(",")]
             feats = {x[0]: x[1] for x in feats}
@@ -130,7 +130,7 @@ class NeuralLM:
         model_file = os.path.abspath(model_file)
         for (attr, val) in inspect.getmembers(self):
             if not (attr.startswith("__") or inspect.ismethod(val) or
-                    isinstance(val, property) or
+                    isinstance(getattr(NeuralLM, attr, None), property) or
                     isinstance(val, Vocabulary) or
                     attr.isupper() or attr in ["callbacks", "model_", "_attention_func_"]):
                 info[attr] = val
@@ -168,19 +168,18 @@ class NeuralLM:
         """
         # первый проход: определяем длины строк, извлекаем словарь символов и признаков
         symbols, labels, features = set(), set(), defaultdict(set)
+        has_labels = self.use_label and any(len(elem) > 1 for elem in X)
+        has_feats = self.use_feats and any(len(elem) > 2 for elem in X)
+        self.vocabulary_ = Vocabulary().train([elem[0] for elem in X])
         for elem in X:
-            word = elem[0]
             label = elem[1] if len(elem) > 1 else None
             feats = elem[2] if len(elem) > 2 else None
-            symbols.update(word)
             if self.use_label and label is not None:
                 labels.add(label)
                 if self.use_feats and feats is not None:
                     for feature, value in feats.items():
                         features[label + "_" + feature].add(value)
         # создаём словари нужного размера
-        self.symbols_ = AUXILIARY + sorted(symbols)
-        self.symbol_codes_ = {x: i for i, x in enumerate(self.symbols_)}
         if len(labels) > 0:
             self.labels_ = AUXILIARY + sorted(labels)
             self.label_codes_ = {x: i for i, x in enumerate(self.labels_)}
@@ -195,11 +194,6 @@ class NeuralLM:
         self.feature_offsets_ = [int(x) for x in self.feature_offsets_]
         print("Symbols: {}, labels: {}, feature values: {}".format(
             len(self.symbols_), self.labels_number, self.feature_offsets_[-1]))
-        return self
-
-    def _make_vocabulary(self, X):
-        self.vocabulary_ = Vocabulary()
-        self.vocabulary_.train((elem[0] for elem in X))
         return self
 
     def make_symbol_features_vocabulary(self, X):
@@ -224,6 +218,14 @@ class NeuralLM:
         print("Symbol labels: {}, symbol feature values: {}".format(
             symbol_labels_count, len(self.symbol_labels_)))
         return self
+
+    @property
+    def symbols_(self):
+        return self.vocabulary_.symbols_
+
+    @property
+    def symbol_codes_(self):
+        return self.vocabulary_.symbol_codes_
 
     @property
     def input_symbols_number(self):
@@ -329,18 +331,20 @@ class NeuralLM:
         else:
             return answer
 
-    def train(self, X, X_dev=None, model_file=None):
+    def train(self, X, X_dev=None, model_file=None, save_file=None):
         np.random.seed(self.random_state)  # initialize the random number generator
         # self.make_vocabulary(X)
         # if self.symbols_has_features:
         #     self.make_symbol_features_vocabulary(X)
-        self._make_vocabulary()
+        self.make_vocabulary(X)
         X_train, indexes_by_buckets = self.transform(X, buckets_number=10)
         if X_dev is not None:
             X_dev, dev_indexes_by_buckets = self.transform(X_dev, bucket_size=256, join_buckets=False)
         else:
             X_dev, dev_indexes_by_buckets = None, None
         self.build()
+        if save_file is not None and model_file is not None:
+            self.to_json(save_file, model_file)
         self.train_model(X_train, indexes_by_buckets, X_dev,
                          dev_indexes_by_buckets, model_file=model_file)
         return self
@@ -650,7 +654,8 @@ def load_lm(infile):
     for key, value in args.items():
         if key == "vocabulary_":
             setattr(lm, key, vocabulary_from_json(value))
-        setattr(lm, key, value)
+        else:
+            setattr(lm, key, value)
     # модель
     lm.build()  # не работает сохранение модели, приходится сохранять только веса
     lm.model_.load_weights(json_data['dump_file'])
