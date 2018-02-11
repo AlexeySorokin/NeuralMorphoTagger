@@ -1,0 +1,11 @@
+{
+	"symbols_has_features": false, "train_files": ["data/gold/turkish-task1-train"], "dev_files": ["data/gold/turkish-task1-test"],
+	"model_file": "models/symbols/turkish-5a.hdf5", "save_file": "models/symbols/turkish-5a.json",
+	"model_params": {
+		"use_embeddings": false, "use_attention": true, "use_attention_bias": true, 
+        "attention_activation": "concatenate", "use_output_rnn": true,
+		"use_label": true, "use_feats": true,
+		"batch_size": 64, "validation_split": 0.2, "nepochs": 50,
+		"history": 5, "memory_embeddings_size": 64, "rnn_size": 64, "rnn": "lstm"},
+	"stop_callback": {"patience": 25, "monitor": "val_loss"}
+}

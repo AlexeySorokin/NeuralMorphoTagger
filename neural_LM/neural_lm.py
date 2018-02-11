@@ -23,7 +23,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 #
 from .common import AUXILIARY, BEGIN, END, UNKNOWN, PAD
 from .common import repeat_
-from .vocabulary import Vocabulary, vocabulary_from_json
+from .vocabulary import Vocabulary, FeatureVocabulary, vocabulary_from_json
 from .cells import make_history, AttentionCell, AttentionCell3D
 from .UD_preparation.read_tags import descr_to_feats
 
@@ -167,10 +167,23 @@ class NeuralLM:
         :return: self, обученная модель
         """
         # первый проход: определяем длины строк, извлекаем словарь символов и признаков
-        symbols, labels, features = set(), set(), defaultdict(set)
-        has_labels = self.use_label and any(len(elem) > 1 for elem in X)
-        has_feats = self.use_feats and any(len(elem) > 2 for elem in X)
-        self.vocabulary_ = Vocabulary().train([elem[0] for elem in X])
+        Vocab = FeatureVocabulary if self.symbols_has_features else Vocabulary
+        self.vocabulary_ = Vocab().train([elem[0] for elem in X])
+        return self
+
+    def make_features(self, X):
+        """
+        :param X: list of lists,
+            создаёт словарь на корпусе X = [x_1, ..., x_m]
+            x_i = [w_i, (c_i, (feats_i)) ], где
+                w: str, строка из корпуса
+                c: str(optional), класс строки (например, часть речи)
+                feats: dict(optional), feats = {f_1: v_1, ..., f_k: v_k},
+                    набор пар признак-значение (например, значения грамматических категорий)
+        :return: self, обученная модель
+        """
+        # первый проход: определяем длины строк, извлекаем словарь символов и признаков
+        labels, features = set(), defaultdict(set)
         for elem in X:
             label = elem[1] if len(elem) > 1 else None
             feats = elem[2] if len(elem) > 2 else None
@@ -180,11 +193,8 @@ class NeuralLM:
                     for feature, value in feats.items():
                         features[label + "_" + feature].add(value)
         # создаём словари нужного размера
-        if len(labels) > 0:
-            self.labels_ = AUXILIARY + sorted(labels)
-            self.label_codes_ = {x: i for i, x in enumerate(self.labels_)}
-        else:
-            self.labels_, self.label_codes_ = None, None
+        self.labels_ = AUXILIARY + sorted(labels)
+        self.label_codes_ = {x: i for i, x in enumerate(self.labels_)}
         self.feature_values_, self.feature_codes_ = [], dict()
         for i, (feat, values) in enumerate(sorted(features.items())):
             self.feature_values_.append({value: j for j, value in enumerate(values)})
@@ -192,8 +202,8 @@ class NeuralLM:
         self.feature_offsets_ = np.concatenate(
             ([0], np.cumsum([len(x) for x in self.feature_values_], dtype=np.int32)))
         self.feature_offsets_ = [int(x) for x in self.feature_offsets_]
-        print("Symbols: {}, labels: {}, feature values: {}".format(
-            len(self.symbols_), self.labels_number, self.feature_offsets_[-1]))
+        # print("Symbols: {}, labels: {}, feature values: {}".format(
+        #     len(self.symbols_), self.labels_number, self.feature_offsets_[-1]))
         return self
 
     def make_symbol_features_vocabulary(self, X):
@@ -213,7 +223,7 @@ class NeuralLM:
         labels = sorted(labels, key=(lambda x: (x.count("_"), x)))
         self.symbol_labels_ = AUXILIARY + labels
         self.symbol_labels_codes_ = {x: i for i, x in enumerate(self.symbol_labels_)}
-        self.symbol_vector_size_ = len(self.symbol_labels_)
+        self.symbol_vector_size = len(self.symbol_labels_)
         symbol_labels_count = sum(int("_" not in x) for x in labels)
         print("Symbol labels: {}, symbol feature values: {}".format(
             symbol_labels_count, len(self.symbol_labels_)))
@@ -230,7 +240,8 @@ class NeuralLM:
     @property
     def input_symbols_number(self):
         # return self.symbol_vector_size_ if self.symbols_has_features else len(self.symbols_)
-        return self.vocabulary_.symbols_number_
+        return (self.symbol_vector_size if self.symbols_has_features
+                else self.vocabulary_.symbols_number_)
 
     @property
     def output_symbols_number(self):
@@ -245,6 +256,18 @@ class NeuralLM:
     def feature_vector_size(self):
         return self.labels_number + self.feature_offsets_[-1]
 
+    @property
+    def symbol_labels_(self):
+        return self.vocabulary_.symbol_labels_
+
+    @property
+    def symbol_labels_codes_(self):
+        return self.vocabulary_.symbol_labels_codes_
+
+    @property
+    def symbol_vector_size(self):
+        return self.vocabulary_.symbol_vector_size_
+
     def _make_word_vector(self, word, bucket_length=None, symbols_has_features=False):
         """
         :param word:
@@ -255,7 +278,7 @@ class NeuralLM:
         if bucket_length is None:
             bucket_length = m + 2
         if symbols_has_features:
-            answer = np.zeros(shape=(bucket_length, self.symbol_vector_size_), dtype=np.uint8)
+            answer = np.zeros(shape=(bucket_length, self.symbol_vector_size), dtype=np.uint8)
             answer[0, BEGIN], answer[m+1, END] = 1, 1
             answer[m+2:, PAD] = 1
             for i, x in enumerate(word, 1):
@@ -333,10 +356,11 @@ class NeuralLM:
 
     def train(self, X, X_dev=None, model_file=None, save_file=None):
         np.random.seed(self.random_state)  # initialize the random number generator
-        # self.make_vocabulary(X)
-        # if self.symbols_has_features:
-        #     self.make_symbol_features_vocabulary(X)
         self.make_vocabulary(X)
+        if self.use_label:
+            self.make_features(X)
+        else:
+            self.labels_, self.label_codes_ = None, None
         X_train, indexes_by_buckets = self.transform(X, buckets_number=10)
         if X_dev is not None:
             X_dev, dev_indexes_by_buckets = self.transform(X_dev, bucket_size=256, join_buckets=False)

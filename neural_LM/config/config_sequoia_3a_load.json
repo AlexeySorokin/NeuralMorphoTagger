@@ -1,0 +1,3 @@
+{
+	"symbols_has_features": true, "test_file": "data/UD/ud_french-sequoia_dev.in", "load_file": "models/ud_french-sequoia_3a_nornn.json"
+}

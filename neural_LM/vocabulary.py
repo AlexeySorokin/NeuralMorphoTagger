@@ -45,9 +45,10 @@ class Vocabulary:
 class FeatureVocabulary(Vocabulary):
 
     def __init__(self, character=False):
-        super(self, FeatureVocabulary).__init__(character=character)
+        super().__init__(character=character)
 
     def train(self, text):
+        super().train(text)
         labels, features = set(), defaultdict(set)
         for word in text:
             if self.character:
@@ -63,11 +64,10 @@ class FeatureVocabulary(Vocabulary):
         labels = sorted(labels, key=(lambda x: (x.count("_"), x)))
         self.symbol_labels_ = AUXILIARY + labels
         self.symbol_labels_codes_ = {x: i for i, x in enumerate(self.symbol_labels_)}
-        self.symbol_vector_size_ = len(self.symbol_labels_)
         return self
 
     @property
-    def symbols_number_(self):
-        return len(self.symbols_)
+    def symbol_vector_size_(self):
+        return len(self.symbol_labels_)
 
 
