@@ -4,12 +4,16 @@ required by NeuralLM, but possibly useful for other modules
 """
 
 import numpy as np
+import itertools
 
 import keras.backend as kb
+from keras.callbacks import Callback
 
+EPS = 1e-15
 
 AUXILIARY = ['PAD', 'BEGIN', 'END', 'UNKNOWN']
-PAD, BEGIN, END, UNKNOWN = 0, 1, 2, 3
+AUXILIARY_CODES = PAD, BEGIN, END, UNKNOWN = 0, 1, 2, 3
+
 
 def to_one_hot(x, k):
     """
@@ -22,18 +26,6 @@ def to_one_hot(x, k):
 def repeat_(x, k):
     tile_factor = [1, k] + [1] * (kb.ndim(x) - 1)
     return kb.tile(x[:,None,:], tile_factor)
-
-def shifted_repeat(x, k):
-    def _scan_shifted_repeat(a, i, b):
-        m, n = b.shape[1:3]
-        start = n * i
-        a_new = tT.set_subtensor(a[:,i:, start:start+n], b[:,:m-i])
-        return [a_new, i+1]
-    x_new = kb.zeros_like(kb.repeat_elements(x, k, axis=2))
-    results, updates = theano.scan(
-        _scan_shifted_repeat, non_sequences=[x],
-        outputs_info=[x_new, 0], n_steps=tT.smallest(k, x.shape[1]))
-    return results[0][-1]
 
 def distributed_transposed_dot(C, P):
     """
@@ -96,12 +88,72 @@ def distributed_dot_softmax(M, H):
     return answer
 
 
-# def test_transposed_dot():
-#     A = np.reshape(np.arange(24, dtype=float), (2, 4, 3))
-#     H = np.array(([1,-2, 1,0], [1, -3, 2, 1]), dtype=float)
-#     a = tT.dtensor3()
-#     h = tT.dmatrix()
-#     b = distributed_transposed_dot(a, h)
-#     f = theano.function([a, h], [b], on_unused_input='warn')
-#     print(f(A, H))
+class CustomCallback(Callback):
+
+    def __init__(self):
+        super(CustomCallback, self).__init__()
+
+    def on_train_begin(self, logs=None):
+        self.verbose = self.params['verbose']
+        self.epochs = self.params['epochs']
+        self.train_losses = []
+        self.val_losses = []
+        self.best_loss = np.inf
+
+    def on_epoch_begin(self, epoch, logs=None):
+        print('Epoch %d/%d' % (epoch + 1, self.epochs))
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.train_losses.append(logs["loss"])
+        self.val_losses.append(logs["val_loss"])
+        print("loss: {:.4f}, val_loss: {:.4f}".format(self.train_losses[-1], self.val_losses[-1]))
+        if self.val_losses[-1] < self.best_loss:
+            self.best_loss = self.val_losses[-1]
+            print(", best loss\n")
+        else:
+            print("\n")
+
+
+def generate_data(X, indexes_by_buckets, output_symbols_number,
+                  batch_size=None, use_last=True, has_answer=True,
+                  shift_answer=False, shuffle=True, yield_weights=True,
+                  duplicate_answer=False):
+    fields_number = len(X[0]) - int(has_answer and not use_last)
+    answer_index = 0 if use_last else -1 if has_answer else None
+    if batch_size is None:
+        batches_indexes = [(i, 0) for i in range(len(indexes_by_buckets))]
+    else:
+        batches_indexes = list(itertools.chain.from_iterable(
+            (((i, j) for j in range(0, len(bucket), batch_size))
+             for i, bucket in enumerate(indexes_by_buckets))))
+    total_arrays_size = sum(np.count_nonzero(X[j][answer_index] != PAD) - 1
+                            for elem in indexes_by_buckets for j in elem)
+    total_data_length = sum(len(elem) for elem in indexes_by_buckets)
+    while True:
+        if shuffle:
+            for elem in indexes_by_buckets:
+                np.random.shuffle(elem)
+            np.random.shuffle(batches_indexes)
+        for i, start in batches_indexes:
+            bucket_size = len(indexes_by_buckets[i])
+            end = min(bucket_size, start + batch_size) if batch_size is not None else bucket_size
+            bucket_indexes = indexes_by_buckets[i][start:end]
+            to_yield = [np.array([X[j][k] for j in bucket_indexes])
+                        for k in range(fields_number)]
+            if has_answer:
+                indexes_to_yield = np.array([X[j][answer_index] for j in bucket_indexes])
+                if shift_answer:
+                    padding = np.full(shape=(end - start, 1), fill_value=PAD)
+                    indexes_to_yield = np.hstack((indexes_to_yield[:,1:], padding))
+                y_to_yield = to_one_hot(indexes_to_yield, output_symbols_number)
+                weights_to_yield = np.ones(shape=(end - start,), dtype=np.float32)
+                if yield_weights:
+                    weights_to_yield *= total_data_length * indexes_to_yield.shape[1]
+                    weights_to_yield /= total_arrays_size
+                if duplicate_answer:
+                    y_to_yield = [y_to_yield, y_to_yield]
+                    weights_to_yield = [weights_to_yield, weights_to_yield]
+                yield (to_yield, y_to_yield, weights_to_yield)
+            else:
+                yield to_yield
 

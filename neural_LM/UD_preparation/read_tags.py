@@ -2,11 +2,16 @@ import sys
 
 def descr_to_feats(symbol):
     if "," in symbol:
-        symbol, feats = symbol.split(",")
-        feats = tuple(tuple(x.split("=")) for x in feats.split("|"))
+        symbol, feats = symbol.split(",", maxsplit=1)
+        fields = []
+        for elem in feats.split("|"):
+            key, values = elem.split("=", maxsplit=1)
+            values = values.split(",")
+            fields.extend((key, value) for value in values)
+        fields = tuple(fields)
     else:
-        feats = ()
-    return symbol, feats
+        fields = ()
+    return symbol, fields
 
 def read_tags_input(infile):
     answer, curr_sent = [], []
@@ -18,11 +23,6 @@ def read_tags_input(infile):
                     answer.append([curr_sent])
                 curr_sent = []
                 continue
-            # splitted = line.split(",")
-            # feats = ()
-            # if len(splitted) == 2:
-            #     feats = tuple(tuple(x.split("=")) for x in splitted[1].split("|"))
-            # curr_sent.append((splitted[0], feats))
             curr_sent.append(line)
         if len(curr_sent) > 0:
             answer.append([curr_sent])

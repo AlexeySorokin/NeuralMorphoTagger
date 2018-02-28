@@ -157,6 +157,7 @@ class AttentionCell3D(Layer):
 
     def __init__(self, left, input_dim, output_dim, right=0,
                  merge="concatenate", use_bias=False,
+                 embeddings_dropout=0.0,
                  embeddings_initializer='uniform', embeddings_regularizer=None,
                  activity_regularizer=None, embeddings_constraint=None, **kwargs):
         if 'input_shape' not in kwargs:
@@ -167,6 +168,7 @@ class AttentionCell3D(Layer):
         self.right = right
         self.merge = merge
         self.use_bias = use_bias
+        self.embeddings_dropout = embeddings_dropout
         self.embeddings_initializer = initializers.get(embeddings_initializer)
         self.embeddings_regularizer = regularizers.get(embeddings_regularizer)
         self.activity_regularizer = regularizers.get(activity_regularizer)
@@ -199,6 +201,8 @@ class AttentionCell3D(Layer):
     def call(self, inputs, **kwargs):
         assert isinstance(inputs, list) and len(inputs) == 2
         symbols, encodings = inputs[0], inputs[1]
+        # dropout masks
+        self._generate_dropout_mask(inputs[1])
         # contexts.shape = (M, T, left, input_dim)
         contexts = make_history(symbols, self.left, symbols[:,:1])
         # M.shape = C.shape = (M, T, left, output_dim)
@@ -206,6 +210,9 @@ class AttentionCell3D(Layer):
         C = kb.dot(contexts, self.C) # output embeddings
         if self.use_bias:
             M += self.T
+        if self.embeddings_dropout > 0.0:
+            M = M * self._dropout_mask[0]
+            C = C * self._dropout_mask[1]
         p = distributed_dot_softmax(M, encodings)
         compressed_context = distributed_transposed_dot(C, p)
         if self.merge in ["concatenate", "sum"] :
@@ -227,3 +234,46 @@ class AttentionCell3D(Layer):
             output_shape = second_shape
         p_shape = second_shape[:2] + (self.input_dim,)
         return [output_shape, p_shape]
+
+    def _generate_dropout_mask(self, inputs, training=None):
+        if 0 < self.embeddings_dropout < 1:
+            ones = kb.expand_dims(kb.ones_like(inputs), -2)
+            ones = kb.repeat_elements(ones, self.left, -2)
+
+            def dropped_inputs():
+                return kb.dropout(ones, self.embeddings_dropout)
+
+            self._dropout_mask = [kb.in_train_phase(dropped_inputs,
+                                                    ones, training=training)
+                                  for _ in range(2)]
+        else:
+            self._dropout_mask = None
+
+class TransposedWrapper(kl.Layer):
+
+    def __init__(self, layer, feature_matrix=None, **kwargs):
+        super(TransposedWrapper, self).__init__(**kwargs)
+        self.layer = layer
+        if feature_matrix is not None:
+            self.feature_matrix = kb.constant(feature_matrix)
+            self.output_dim = feature_matrix.shape[0]
+        else:
+            self.feature_matrix = None
+            self.output_dim = self.layer.kernel._keras_shape[0]
+            # self.output_dim = kb.shape(self.layer.kernel)[0]
+
+    def build(self, input_shape):
+        if not self.layer.built:
+            self.layer.build(input_shape)
+        super(TransposedWrapper, self).build(input_shape)
+        self.built = True
+
+    def call(self, inputs, **kwargs):
+        ref_embeddings = self.layer.kernel
+        if self.feature_matrix is not None:
+            ref_embeddings = kb.dot(self.feature_matrix, ref_embeddings)
+        res = kb.dot(inputs, kb.transpose(ref_embeddings))
+        return res
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1] + (self.output_dim,)
