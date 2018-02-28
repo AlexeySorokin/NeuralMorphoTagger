@@ -7,6 +7,7 @@ from keras.callbacks import EarlyStopping
 
 from neural_LM.neural_lm import NeuralLM, read_input, load_lm
 from neural_LM.UD_preparation.read_tags import read_tags_input
+from neural_LM.UD_preparation.extract_tags_from_UD import read_tags_infile
 
 SHORT_OPTS = "HLFm:t:v:p:o:s:d:l:h:aeO:"
 LONG_OPTS = ["batch_size=", "nepochs=", "validation=",
@@ -50,14 +51,16 @@ if __name__ == '__main__':
         train_data = []
         for train_file in params["train_files"]:
             if symbols_has_features:
-                train_data += read_tags_input(train_file)
+                # train_data += read_tags_input(train_file)
+                train_data += read_tags_infile(train_file)
             else:
                 train_data += read_input(train_file, label_field="pos")
         if params["dev_files"] is not None:
             dev_data = []
             for dev_file in params["dev_files"]:
                 if symbols_has_features:
-                    dev_data += read_tags_input(dev_file)
+                    # dev_data += read_tags_input(dev_file)
+                    dev_data += read_tags_infile(dev_file)
                 else:
                     dev_data += read_input(dev_file, label_field="pos")
         else:

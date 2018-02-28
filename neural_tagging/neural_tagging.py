@@ -1,11 +1,6 @@
-from collections import defaultdict
 import inspect
 import json
-import os
 
-import numpy as np
-
-import keras.backend as kb
 import keras.layers as kl
 import keras.optimizers as ko
 import keras.regularizers as kreg

@@ -7,9 +7,22 @@ WORD_COLUMN, POS_COLUMN, TAG_COLUMN = 1, 3, 5
 POS_MAPPING = {".": "<SENT>", "?": "<QUESTION>", "!":"<EXCLAM>",
                ",": "<COMMA>", "-": "<HYPHEN>", "--": "<DASH>",
                ":": "COLON", ";": "SEMICOLON", "\"": "<QUOTE>"}
+REVERSE_POS_MAPPING = list(POS_MAPPING.values())
+
+
+def make_UD_pos_and_tag(tag):
+    splitted = tag.split(",", maxsplit=1)
+    if len(splitted) == 2:
+        pos, tag = splitted
+    else:
+        pos, tag = splitted[0], "_"
+    if pos in REVERSE_POS_MAPPING:
+        pos = "PUNCT"
+    return pos, tag
+
 
 def process_word(word, to_lower=False, append_case=None):
-    if all(x.isupper() for x in word):
+    if all(x.isupper() for x in word) and len(word) > 1:
         uppercase = "<ALL_UPPER>"
     elif word[0].isupper():
         uppercase = "<FIRST_UPPER>"
@@ -58,20 +71,25 @@ def extract_frequent_words(infiles, to_lower=False, append_case="first", thresho
 
 
 def read_tags_infile(infile, read_words=False, to_lower=False,
-                     append_case="first", wrap=False,
-                     attach_tokens=False, max_sents=-1):
-    answer, curr_sent, curr_word_sent = [], [], []
+                     append_case="first", wrap=False, attach_tokens=False,
+                     word_column=WORD_COLUMN, pos_column=POS_COLUMN,
+                     tag_column=TAG_COLUMN, read_only_words=False,
+                     return_source_words=False, max_sents=-1):
+    answer, curr_tag_sent, curr_word_sent = [], [], []
+    source_answer, curr_source_sent = [], []
     with open(infile, "r", encoding="utf8") as fin:
         print(infile)
-        has_errors = False
         for line in fin:
             line = line.strip()
             if line.startswith("#"):
                 continue
             if line == "":
-                if len(curr_sent) > 0:
-                    answer.append((curr_word_sent, curr_sent))
-                curr_sent, curr_word_sent = [], []
+                if len(curr_word_sent) > 0:
+                    to_append = (curr_word_sent if read_only_words
+                                 else (curr_word_sent, curr_tag_sent))
+                    answer.append(to_append)
+                    source_answer.append(curr_source_sent)
+                curr_tag_sent, curr_word_sent = [], []
                 if len(answer) == max_sents:
                     break
                 continue
@@ -79,23 +97,26 @@ def read_tags_infile(infile, read_words=False, to_lower=False,
             index = splitted[0]
             if not index.isdigit():
                 continue
-            word, pos, tag = splitted[WORD_COLUMN], splitted[POS_COLUMN], splitted[TAG_COLUMN]
-            if pos == "PUNCT" and word in POS_MAPPING:
-                pos = POS_MAPPING[word]
-            if tag == "_":
-                curr_sent.append(pos)
-            else:
-                curr_sent.append("{},{}".format(pos, tag))
+            word = splitted[word_column]
+            curr_source_sent.append(word)
             word = process_word(word, to_lower=to_lower, append_case=append_case)
             curr_word_sent.append(word)
-            if pos == "_" and not has_errors:
-                print(line)
-                has_errors = True
-        if len(curr_sent) > 0:
-            answer.append((curr_word_sent, curr_sent))
-    for i, (word_sent, tag_sent) in enumerate(answer):
-        for j, (word, tag) in enumerate(zip(word_sent, tag_sent)):
-            if attach_tokens:
+            if not read_only_words:
+                pos, tag = splitted[pos_column], splitted[tag_column]
+                if pos == "PUNCT" and word in POS_MAPPING:
+                    pos = POS_MAPPING[word]
+                if tag == "_":
+                    curr_tag_sent.append(pos)
+                else:
+                    curr_tag_sent.append("{},{}".format(pos, tag))
+        if len(curr_tag_sent) > 0:
+            to_append = (curr_word_sent if read_only_words
+                         else (curr_word_sent, curr_tag_sent))
+            answer.append(to_append)
+            source_answer.append(curr_source_sent)
+    if not read_only_words and attach_tokens:
+        for i, (word_sent, tag_sent) in enumerate(answer):
+            for j, (word, tag) in enumerate(zip(word_sent, tag_sent)):
                 sep = "|" if "," in tag else ","
                 word = "".join(word)
                 if word in POS_MAPPING:
@@ -105,7 +126,7 @@ def read_tags_infile(infile, read_words=False, to_lower=False,
         answer = [elem[1] for elem in answer]
     if wrap:
         return [[elem] for elem in answer]
-    return answer
+    return (answer, source_answer) if return_source_words else answer
 
 if __name__ == "__main__":
     L = len(sys.argv[1:])
