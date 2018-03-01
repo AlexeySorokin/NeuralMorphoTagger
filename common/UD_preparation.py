@@ -10,6 +10,20 @@ POS_MAPPING = {".": "<SENT>", "?": "<QUESTION>", "!":"<EXCLAM>",
 REVERSE_POS_MAPPING = list(POS_MAPPING.values())
 
 
+def descr_to_feats(symbol):
+    if "," in symbol:
+        symbol, feats = symbol.split(",", maxsplit=1)
+        fields = []
+        for elem in feats.split("|"):
+            key, values = elem.split("=", maxsplit=1)
+            values = values.split(",")
+            fields.extend((key, value) for value in values)
+        fields = tuple(fields)
+    else:
+        fields = ()
+    return symbol, fields
+
+
 def make_UD_pos_and_tag(tag):
     splitted = tag.split(",", maxsplit=1)
     if len(splitted) == 2:

@@ -3,7 +3,7 @@ import inspect
 
 
 from .common import *
-from .UD_preparation.read_tags import descr_to_feats
+from .UD_preparation import descr_to_feats
 
 
 def vocabulary_from_json(info, use_features=False):
