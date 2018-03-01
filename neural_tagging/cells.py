@@ -13,7 +13,6 @@ class Highway(kl.Layer):
 
     def __init__(self, activation=None, bias_initializer=-1, **kwargs):
         super(Highway, self).__init__(**kwargs)
-        # self.output_dim = output_dim
         self.activation = kact.get(activation)
         self.bias_initializer = bias_initializer
         if isinstance(self.bias_initializer, int):
@@ -45,6 +44,7 @@ class Highway(kl.Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape
+
 
 def weighted_sum(first, second, sigma, first_threshold=-np.inf, second_threshold=np.inf):
     logit_probs = first * sigma + second * (1.0 - sigma)
