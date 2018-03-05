@@ -85,7 +85,7 @@ def extract_frequent_words(infiles, to_lower=False, append_case="first", thresho
 
 
 def read_tags_infile(infile, read_words=False, to_lower=False,
-                     append_case="first", wrap=False, attach_tokens=False,
+                     append_case="first", wrap=False,
                      word_column=WORD_COLUMN, pos_column=POS_COLUMN,
                      tag_column=TAG_COLUMN, read_only_words=False,
                      return_source_words=False, max_sents=-1):
@@ -128,14 +128,6 @@ def read_tags_infile(infile, read_words=False, to_lower=False,
                          else (curr_word_sent, curr_tag_sent))
             answer.append(to_append)
             source_answer.append(curr_source_sent)
-    if not read_only_words and attach_tokens:
-        for i, (word_sent, tag_sent) in enumerate(answer):
-            for j, (word, tag) in enumerate(zip(word_sent, tag_sent)):
-                sep = "|" if "," in tag else ","
-                word = "".join(word)
-                if word in POS_MAPPING:
-                    word = POS_MAPPING[word]
-                tag_sent[j] += "{}token={}".format(sep, word)
     if not read_words:
         answer = [elem[1] for elem in answer]
     if wrap:

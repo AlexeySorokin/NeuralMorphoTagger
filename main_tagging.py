@@ -5,7 +5,7 @@ import copy
 import numpy as np
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-from neural_LM.UD_preparation.extract_tags_from_UD import read_tags_infile, make_UD_pos_and_tag
+from common.UD_preparation import read_tags_infile, make_UD_pos_and_tag
 from neural_tagging.neural_tagging import CharacterTagger, load_tagger
 
 DEFAULT_NONE_PARAMS = ["model_file", "test_files", "outfiles", "train_files",
@@ -140,7 +140,7 @@ if __name__ == '__main__':
             dev_data, dev_labels = None, None
         cls.train(train_data, train_labels, dev_data, dev_labels,
                   model_file=params["model_file"], save_file=params["save_file"],
-                  lm_file=params["lm_file"], **params["vocabulary_files"])
+                  **params["vocabulary_files"])
     elif params["load_file"] is not None:
         cls, train_data = load_tagger(params["load_file"]), None
     else:

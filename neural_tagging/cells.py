@@ -7,7 +7,7 @@ import keras.initializers as kinit
 from keras.engine.topology import InputSpec
 
 INFTY = -100
-from neural_LM.common import PAD
+from common.common import PAD
 
 class Highway(kl.Layer):
 

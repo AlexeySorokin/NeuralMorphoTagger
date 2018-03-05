@@ -7,10 +7,10 @@ import keras.regularizers as kreg
 from keras import Model
 from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 
-from neural_LM.vocabulary import Vocabulary, FeatureVocabulary, vocabulary_from_json
-from neural_LM.neural_lm import make_bucket_indexes
-from neural_LM.common import *
+from common.vocabulary import Vocabulary, FeatureVocabulary, vocabulary_from_json
+from common.common import *
 from neural_tagging.cells import Highway
+
 
 BUCKET_SIZE = 32
 MAX_WORD_LENGTH = 30
@@ -105,8 +105,6 @@ class CharacterTagger:
             raise ValueError("There should be the same number of lstm layer units and lstm layers")
         if self.regularizer is not None:
             self.regularizer = kreg.l2(self.regularizer)
-        if self.fusion_regularizer is not None:
-            self.fusion_regularizer = kreg.l2(self.fusion_regularizer)
 
     def to_json(self, outfile, model_file, lm_file=None):
         info = dict()
