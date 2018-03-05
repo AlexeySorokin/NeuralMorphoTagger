@@ -1,0 +1,18 @@
+{
+	"train_files": ["data/UD2.0_source/train/hu-ud-train.conllu"],
+    "dev_files": ["data/UD2.0_source/dev/hu-ud-dev.conllu"],
+    "test_files": ["data/UD2.0_source/dev/hu-ud-dev.conllu"],
+    "outfiles": ["neural_tagging/results/verification/results-hu-dev.out"],
+    "prediction_files": ["neural_tagging/results/verification/answer-hu-dev.out"],
+    "model_file": "neural_tagging/models/hu.hdf5",
+    "save_file": "neural_tagging/models/hu.json",
+    "model_params": {
+		"min_char_count": 3, "char_embeddings_size": 32, "char_window_size": [1, 2, 3, 4, 5, 6, 7],
+        "word_lstm_units": 128, "nepochs": 75, "conv_dropout": 0.0, "char_conv_layers": 1,
+        "char_highway_layers": 1, "highway_dropout": 0.0, "word_lstm_layers": 1,
+        "char_filter_multiple": 50, "intermediate_dropout": 0.0, 
+        "word_dropout": 0.3, "lstm_dropout": 0.3, "regularizer": 0.001
+    },
+    "read_params": {"to_lower": true, "append_case": "first"},
+    "stop_callback": {"patience": 10, "monitor": "val_acc"}
+}
